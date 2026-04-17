@@ -519,113 +519,208 @@ class CameraPanel(GlowCard):
 # ══════════════════════════════════════════════════════════
 #  AVPU 글로우 버튼
 # ══════════════════════════════════════════════════════════
+#  AVPU 글라스 카드 버튼  (Car-HMI 스타일)
+# ══════════════════════════════════════════════════════════
 class AvpuButton(QWidget):
+    """
+    글라스모피즘 카드 버튼.
+    - 상단 라이트 하이라이트 → 유리 광택
+    - 블루~시안 그라디언트 배경
+    - 아이콘 크게 (중앙 상단) + 텍스트 하단
+    - A V P U 뱃지 pill 형태
+    """
     def __init__(self, on_click, parent=None):
         super().__init__(parent)
         self._on_click = on_click
         self._pressed  = False
+        self._hover    = False
         self._pulse    = 0.0; self._pdir = 1
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        t = QTimer(self); t.timeout.connect(self._anim); t.start(35)
+        self.setMouseTracking(True)
+        t = QTimer(self); t.timeout.connect(self._anim); t.start(40)
 
     def _anim(self):
-        self._pulse += 0.035*self._pdir
-        if self._pulse >= 1: self._pdir=-1
-        if self._pulse <= 0: self._pdir= 1
+        self._pulse += 0.03 * self._pdir
+        if self._pulse >= 1: self._pdir = -1
+        if self._pulse <= 0: self._pdir =  1
         self.update()
 
     def paintEvent(self, _):
-        p = QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h, r = self.width(), self.height(), 12
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h, r = self.width(), self.height(), 18
 
-        # 외부 글로우 레이어
-        alpha = int(25 + 50*self._pulse) if not self._pressed else 90
-        for i in range(7, 0, -1):
-            a = max(0, alpha - i*8)
-            gp = QPen(QColor(0, 170+int(50*self._pulse), 255, a)); gp.setWidth(i*2)
+        scale = 0.96 if self._pressed else 1.0
+        ox = w * (1 - scale) / 2; oy = h * (1 - scale) / 2
+        rw = w * scale;            rh = h * scale
+
+        # ── 외부 소프트 글로우 ──────────────────────────
+        glow_a = int(40 + 30 * self._pulse) if not self._pressed else 20
+        for i in range(5, 0, -1):
+            a = max(0, glow_a - i * 7)
+            gp = QPen(QColor(30, 160, 255, a)); gp.setWidth(i * 2)
             p.setPen(gp); p.setBrush(Qt.BrushStyle.NoBrush)
-            m=i; p.drawRoundedRect(m, m, w-m*2, h-m*2, r, r)
+            m = ox + i
+            p.drawRoundedRect(QRectF(m, oy+i, rw-i*2, rh-i*2), r, r)
 
-        # 배경
-        bg = QLinearGradient(0,0,0,h)
-        bg.setColorAt(0, QColor("#041628") if not self._pressed else QColor("#06203a"))
-        bg.setColorAt(1, QColor("#020d18"))
-        p.setPen(QPen(QColor(NEON if not self._pressed else "#6df"), 1.5))
-        p.setBrush(QBrush(bg)); p.drawRoundedRect(5, 5, w-10, h-10, r, r)
+        # ── 배경 그라디언트 (블루~딥블루) ──────────────
+        bg = QLinearGradient(ox, oy, ox, oy + rh)
+        if self._pressed:
+            bg.setColorAt(0, QColor(0, 100, 210))
+            bg.setColorAt(1, QColor(0,  50, 140))
+        else:
+            bg.setColorAt(0, QColor(10, 130, 255))
+            bg.setColorAt(1, QColor(0,  60, 180))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(bg))
+        p.drawRoundedRect(QRectF(ox, oy, rw, rh), r, r)
 
-        # 상단 수평 라인 강조
-        hl = QLinearGradient(10, 6, w-10, 6)
-        hl.setColorAt(0, QColor(0,170,255,0)); hl.setColorAt(.5, QColor(0,200,255,160)); hl.setColorAt(1, QColor(0,170,255,0))
-        p.setPen(QPen(QBrush(hl), 1)); p.drawLine(10, 6, w-10, 6)
+        # ── 상단 유리 광택 (흰색 반투명 호) ─────────────
+        glass = QLinearGradient(ox, oy, ox, oy + rh * 0.45)
+        glass.setColorAt(0,   QColor(255, 255, 255, 70))
+        glass.setColorAt(0.5, QColor(255, 255, 255, 18))
+        glass.setColorAt(1,   QColor(255, 255, 255, 0))
+        p.setBrush(QBrush(glass))
+        pp = QPainterPath()
+        pp.addRoundedRect(QRectF(ox, oy, rw, rh * 0.5), r, r)
+        p.drawPath(pp)
 
-        # 텍스트
-        neon_c = QColor(NEON) if not self._pressed else QColor("#aef")
-        p.setPen(QPen(neon_c))
-        p.setFont(QFont(FONT, 14, QFont.Weight.Bold))
-        p.drawText(QRectF(5, 5, w-10, (h-10)*0.35), Qt.AlignmentFlag.AlignCenter, "🧠  AVPU")
-        p.setFont(QFont(FONT, 10))
-        p.drawText(QRectF(5, (h-10)*0.35, w-10, (h-10)*0.3), Qt.AlignmentFlag.AlignCenter, "의식 수준 확인")
+        # ── 테두리 (옅은 흰) ─────────────────────────────
+        p.setPen(QPen(QColor(255, 255, 255, 55), 1.2))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(QRectF(ox+1, oy+1, rw-2, rh-2), r, r)
 
-        # A V P U 뱃지
-        bw = (w-28)/4; bh=22; by=h-bh-8
-        for i,(lt,lc) in enumerate([("A",GREEN),("V",YELLOW),("P",ORANGE),("U",RED)]):
-            bx = 8+i*(bw+4)
-            gc = QColor(lc); gc.setAlpha(30)
-            p.setBrush(QBrush(gc))
-            p.setPen(QPen(QColor(lc), 1))
-            p.drawRoundedRect(QRectF(bx, by, bw, bh), 4, 4)
+        # ── 아이콘 ───────────────────────────────────────
+        p.setPen(QPen(QColor(255, 255, 255, 230)))
+        p.setFont(QFont(FONT, 22))
+        p.drawText(QRectF(ox, oy + 4, rw, rh * 0.40),
+                   Qt.AlignmentFlag.AlignCenter, "🧠")
+
+        # ── 주 텍스트 ────────────────────────────────────
+        p.setFont(QFont(FONT, 12, QFont.Weight.Bold))
+        p.setPen(QPen(QColor(255, 255, 255)))
+        p.drawText(QRectF(ox, oy + rh * 0.44, rw, rh * 0.20),
+                   Qt.AlignmentFlag.AlignCenter, "AVPU")
+        p.setFont(QFont(FONT, 8))
+        p.setPen(QPen(QColor(200, 230, 255)))
+        p.drawText(QRectF(ox, oy + rh * 0.60, rw, rh * 0.14),
+                   Qt.AlignmentFlag.AlignCenter, "의식 수준 확인")
+
+        # ── A V P U 뱃지 ────────────────────────────────
+        bw = (rw - 24) / 4; bh = 20; by = oy + rh - bh - 10
+        for i, (lt, lc) in enumerate([
+            ("A", QColor(0,230,120)),
+            ("V", QColor(255,220,0)),
+            ("P", QColor(255,140,0)),
+            ("U", QColor(255,60,60)),
+        ]):
+            bx = ox + 6 + i * (bw + 4)
+            pill = QColor(lc); pill.setAlpha(55)
+            p.setBrush(QBrush(pill))
+            p.setPen(QPen(lc, 1))
+            p.drawRoundedRect(QRectF(bx, by, bw, bh), bh/2, bh/2)
             p.setFont(QFont(FONT, 8, QFont.Weight.Bold))
-            p.setPen(QPen(QColor(lc)))
+            p.setPen(QPen(lc))
             p.drawText(QRectF(bx, by, bw, bh), Qt.AlignmentFlag.AlignCenter, lt)
 
-    def mousePressEvent(self, _): self._pressed=True; self.update()
+    def mousePressEvent(self, _):   self._pressed = True;  self.update()
     def mouseReleaseEvent(self, e):
-        self._pressed=False; self.update()
+        self._pressed = False; self.update()
         if self.rect().contains(e.position().toPoint()): self._on_click()
-    def enterEvent(self, _): self.update()
-    def leaveEvent(self, _): self.update()
+    def enterEvent(self, _): self._hover = True;  self.update()
+    def leaveEvent(self, _): self._hover = False; self.update()
 
 
 # ══════════════════════════════════════════════════════════
-#  응급 시나리오 버튼
+#  응급 시나리오 버튼  (Car-HMI 글라스 카드)
 # ══════════════════════════════════════════════════════════
 class EmergBtn(QWidget):
+    """
+    글라스 카드 스타일:
+    - 색상별 그라디언트 배경 (진→연)
+    - 상단 유리 광택
+    - 아이콘 좌측 원형 배지 + 텍스트 우측
+    - 눌리면 살짝 스케일 다운
+    """
+    # 색상별 그라디언트 쌍 (top, bottom)
+    _GRADS = {
+        "#ff3b3b": ("#c0001a", "#7a0010"),   # RED  - CPR
+        "#ff8c00": ("#c05800", "#7a3000"),   # ORANGE - 출혈
+        "#ffe033": ("#9a8000", "#5a4a00"),   # YELLOW - 화상
+        "#00e5c8": ("#007a6a", "#003d35"),   # TEAL  - 골절
+        "#0af":    ("#006aaa", "#003366"),   # NEON  - 익수
+        "#c87bff": ("#6a00cc", "#3a0077"),   # PURPLE- 기도
+    }
+
     def __init__(self, icon, name, color, on_click, parent=None):
         super().__init__(parent)
-        self._color = QColor(color); self._pressed=False
-        self._on_click=on_click
+        self._icon     = icon
+        self._name     = name
+        self._color    = QColor(color)
+        self._pressed  = False
+        self._on_click = on_click
+        grad = self._GRADS.get(color, ("#0a3060", "#041830"))
+        self._g_top = QColor(grad[0])
+        self._g_bot = QColor(grad[1])
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._icon=icon; self._name=name
 
     def paintEvent(self, _):
-        p = QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w,h,r = self.width(), self.height(), 8
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h, r = self.width(), self.height(), 14
+
+        scale = 0.95 if self._pressed else 1.0
+        ox = w*(1-scale)/2; oy = h*(1-scale)/2
+        rw = w*scale;        rh = h*scale
+
+        # ── 소프트 글로우 ─────────────────────────────────
         c = self._color
+        for i in range(4, 0, -1):
+            a = (15 + i*10) if not self._pressed else 5
+            gp = QPen(QColor(c.red(), c.green(), c.blue(), a)); gp.setWidth(i*2)
+            p.setPen(gp); p.setBrush(Qt.BrushStyle.NoBrush)
+            m = ox+i
+            p.drawRoundedRect(QRectF(m, oy+i, rw-i*2, rh-i*2), r, r)
 
-        # 글로우
-        for i in range(4,0,-1):
-            gp = QPen(QColor(c.red(),c.green(),c.blue(), 20+i*8)); gp.setWidth(i*2)
-            p.setPen(gp); p.setBrush(Qt.BrushStyle.NoBrush); m=i
-            p.drawRoundedRect(m, m, w-m*2, h-m*2, r, r)
+        # ── 그라디언트 배경 ───────────────────────────────
+        bg = QLinearGradient(ox, oy, ox+rw*0.6, oy+rh)
+        t_ = self._g_top if not self._pressed else self._g_bot
+        b_ = self._g_bot
+        bg.setColorAt(0, t_); bg.setColorAt(1, b_)
+        p.setPen(Qt.PenStyle.NoPen); p.setBrush(QBrush(bg))
+        p.drawRoundedRect(QRectF(ox, oy, rw, rh), r, r)
 
-        # 배경
-        bg = QLinearGradient(0,0,0,h)
-        a = "#091e30" if not self._pressed else "#0c2840"
-        bg.setColorAt(0, QColor(a)); bg.setColorAt(1, QColor(PANEL))
-        p.setPen(QPen(c, 1.5)); p.setBrush(QBrush(bg))
-        p.drawRoundedRect(3, 3, w-6, h-6, r, r)
+        # ── 유리 광택 ─────────────────────────────────────
+        glass = QLinearGradient(ox, oy, ox, oy+rh*0.5)
+        glass.setColorAt(0,   QColor(255,255,255, 45))
+        glass.setColorAt(0.6, QColor(255,255,255,  8))
+        glass.setColorAt(1,   QColor(255,255,255,  0))
+        p.setBrush(QBrush(glass))
+        gp2 = QPainterPath()
+        gp2.addRoundedRect(QRectF(ox, oy, rw, rh*0.55), r, r)
+        p.drawPath(gp2)
 
-        # 왼쪽 세로 강조선
-        lc = QLinearGradient(3, 6, 3, h-6)
-        lc.setColorAt(0, QColor(c.red(),c.green(),c.blue(),0))
-        lc.setColorAt(.5, QColor(c.red(),c.green(),c.blue(),200))
-        lc.setColorAt(1, QColor(c.red(),c.green(),c.blue(),0))
-        p.setPen(QPen(QBrush(lc), 2.5)); p.drawLine(5, 8, 5, h-8)
+        # ── 테두리 ───────────────────────────────────────
+        p.setPen(QPen(QColor(255,255,255, 40), 1))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(QRectF(ox+1, oy+1, rw-2, rh-2), r, r)
 
-        # 텍스트
-        p.setPen(QPen(c)); p.setFont(QFont(FONT, 14)); p.drawText(QRectF(14, 0, 28, h), Qt.AlignmentFlag.AlignCenter, self._icon)
-        p.setPen(QPen(QColor(TEXT))); p.setFont(QFont(FONT, 10, QFont.Weight.Bold))
-        p.drawText(QRectF(42, 0, w-46, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._name)
+        # ── 좌측 원형 아이콘 배지 ─────────────────────────
+        cr = rh * 0.30
+        cx = ox + cr + 10; cy = oy + rh/2
+        badge_bg = QColor(255, 255, 255, 35)
+        p.setBrush(QBrush(badge_bg))
+        p.setPen(QPen(QColor(255,255,255,60), 1))
+        p.drawEllipse(QRectF(cx-cr, cy-cr, cr*2, cr*2))
+        p.setFont(QFont(FONT, int(cr * 0.85)))
+        p.setPen(QPen(QColor(255,255,255,240)))
+        p.drawText(QRectF(cx-cr, cy-cr, cr*2, cr*2), Qt.AlignmentFlag.AlignCenter, self._icon)
+
+        # ── 텍스트 ───────────────────────────────────────
+        tx = cx + cr + 10; tw = rw - (tx - ox) - 8
+        p.setFont(QFont(FONT, 10, QFont.Weight.Bold))
+        p.setPen(QPen(QColor(255,255,255,240)))
+        p.drawText(QRectF(tx, oy, tw, rh), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._name)
 
     def mousePressEvent(self, _): self._pressed=True; self.update()
     def mouseReleaseEvent(self, e):
