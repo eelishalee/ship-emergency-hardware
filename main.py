@@ -20,12 +20,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FONT = "Malgun Gothic"
 
 # ── 팔레트 ────────────────────────────────────────────────
-BG        = "#030810"
-PANEL     = "#06101e"
-PANEL2    = "#081428"
+BG        = "#02050e"
+PANEL     = "#07101f"
+PANEL2    = "#0a1628"
 GRID_CLR  = "#0c1e36"
-NEON      = "#0af"          # 전기 시안
-NEON2     = "#06f"          # 딥 블루
+NEON      = "#0af"
+NEON2     = "#06f"
 NEON_DIM  = "#0369a1"
 RED       = "#ff3b3b"
 RED2      = "#cc1414"
@@ -40,38 +40,92 @@ DIM2      = "#1a3050"
 
 
 # ══════════════════════════════════════════════════════════
-#  격자 배경 위젯 (모든 화면 공통 배경)
+#  별빛 하늘 배경  (Star-field + Horizon Glow)
 # ══════════════════════════════════════════════════════════
 class GridBg(QWidget):
-    """Dark bg + subtle neon grid mesh."""
+    """
+    우주 대시보드 배경:
+    · 별이 박힌 심우주 그라디언트 (검정→딥블루)
+    · 지평선 오렌지/앰버 글로우
+    · 중앙 블루 대기광
+    · 빛 갈래 레이 (블루)
+    """
+    _STARS: list = []
+
+    @classmethod
+    def _build_stars(cls, w, h):
+        import random
+        rng = random.Random(7)
+        cls._STARS = [
+            (rng.randint(0, w), rng.randint(0, int(h * 0.72)), rng.random())
+            for _ in range(240)
+        ]
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._built = False
 
     def paintEvent(self, _):
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor(BG))
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
 
-        # grid
-        pen = QPen(QColor(GRID_CLR)); pen.setWidth(1)
-        p.setPen(pen)
-        step = 38
-        for x in range(0, self.width(), step):
-            p.drawLine(x, 0, x, self.height())
-        for y in range(0, self.height(), step):
-            p.drawLine(0, y, self.width(), y)
+        if not self._built:
+            self._build_stars(w, h)
+            self._built = True
 
-        # blue radial glow top-left
-        rg = QRadialGradient(QPointF(0, 0), 400)
-        rg.setColorAt(0, QColor(0, 100, 255, 35))
-        rg.setColorAt(1, QColor(0, 0, 0, 0))
-        p.fillRect(self.rect(), QBrush(rg))
+        # ── 심우주 하늘 그라디언트 ────────────────────────
+        sky = QLinearGradient(0, 0, 0, h)
+        sky.setColorAt(0.00, QColor(  2,   4,  12))   # 최상단 거의 검정
+        sky.setColorAt(0.30, QColor(  4,  10,  28))   # 딥 네이비
+        sky.setColorAt(0.60, QColor(  6,  18,  45))   # 블루 미드나잇
+        sky.setColorAt(0.75, QColor( 10,  25,  55))   # 지평선 위 딥블루
+        sky.setColorAt(0.88, QColor( 15,  30,  50))   # 대기층
+        sky.setColorAt(1.00, QColor(  8,  16,  30))   # 하단
+        p.fillRect(self.rect(), QBrush(sky))
 
-        # blue radial glow bottom-right
-        rg2 = QRadialGradient(QPointF(self.width(), self.height()), 380)
-        rg2.setColorAt(0, QColor(0, 170, 255, 28))
-        rg2.setColorAt(1, QColor(0, 0, 0, 0))
-        p.fillRect(self.rect(), QBrush(rg2))
+        # ── 지평선 오렌지 글로우 ──────────────────────────
+        hy = int(h * 0.76)
+        for rad_ratio, r, g, b, alpha in [
+            (0.55, 255, 120,  20, 55),   # 오렌지 코어
+            (0.70, 255,  80,   0, 28),   # 딥 레드
+            (0.80, 255, 160,  50, 18),   # 앰버 헤일로
+        ]:
+            rg = QRadialGradient(QPointF(w / 2, hy), w * rad_ratio)
+            rg.setColorAt(0, QColor(r, g, b, alpha))
+            rg.setColorAt(1, QColor(r, g, b, 0))
+            p.fillRect(self.rect(), QBrush(rg))
+
+        # ── 중앙 블루 대기광 ──────────────────────────────
+        rg_b = QRadialGradient(QPointF(w / 2, h * 0.62), w * 0.48)
+        rg_b.setColorAt(0, QColor(20, 100, 255, 38))
+        rg_b.setColorAt(1, QColor(0,   0,   0,  0))
+        p.fillRect(self.rect(), QBrush(rg_b))
+
+        # ── 블루 빛 레이 (지평선에서 방사) ───────────────
+        p.save()
+        for dx, alpha in [(-280, 18), (-140, 26), (0, 30), (140, 26), (280, 18)]:
+            ray = QPainterPath()
+            ray.moveTo(w / 2 + dx, hy)
+            ray.lineTo(w / 2 + dx - 18, 0)
+            ray.lineTo(w / 2 + dx + 18, 0)
+            ray.closeSubpath()
+            ray_grad = QLinearGradient(0, hy, 0, 0)
+            ray_grad.setColorAt(0, QColor(40, 140, 255, alpha))
+            ray_grad.setColorAt(1, QColor(40, 140, 255, 0))
+            p.fillPath(ray, QBrush(ray_grad))
+        p.restore()
+
+        # ── 별 ────────────────────────────────────────────
+        p.setPen(Qt.PenStyle.NoPen)
+        for sx, sy, b in self._STARS:
+            if sx > w or sy > h:
+                continue
+            alpha = int(55 + b * 190)
+            sz    = 0.4 + b * 1.4
+            p.setBrush(QColor(255, 255, 255, alpha))
+            p.drawEllipse(QRectF(sx - sz/2, sy - sz/2, sz, sz))
 
 
 # ══════════════════════════════════════════════════════════
@@ -519,28 +573,26 @@ class CameraPanel(GlowCard):
 # ══════════════════════════════════════════════════════════
 #  AVPU 글로우 버튼
 # ══════════════════════════════════════════════════════════
-#  AVPU 글라스 카드 버튼  (Car-HMI 스타일)
+#  AVPU 오로라 카드 버튼
 # ══════════════════════════════════════════════════════════
 class AvpuButton(QWidget):
     """
-    글라스모피즘 카드 버튼.
-    - 상단 라이트 하이라이트 → 유리 광택
-    - 블루~시안 그라디언트 배경
-    - 아이콘 크게 (중앙 상단) + 텍스트 하단
-    - A V P U 뱃지 pill 형태
+    오로라 블롭 글라스 카드:
+    · 어두운 베이스 위 블루 오로라 블롭 (방사형 그라디언트)
+    · 반투명 프로스티드 글라스 레이어
+    · 유리 상단 광택 라인
+    · 펄스 글로우 애니메이션
     """
     def __init__(self, on_click, parent=None):
         super().__init__(parent)
         self._on_click = on_click
         self._pressed  = False
-        self._hover    = False
         self._pulse    = 0.0; self._pdir = 1
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMouseTracking(True)
         t = QTimer(self); t.timeout.connect(self._anim); t.start(40)
 
     def _anim(self):
-        self._pulse += 0.03 * self._pdir
+        self._pulse += 0.025 * self._pdir
         if self._pulse >= 1: self._pdir = -1
         if self._pulse <= 0: self._pdir =  1
         self.update()
@@ -548,181 +600,183 @@ class AvpuButton(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h, r = self.width(), self.height(), 18
+        w, h, r = self.width(), self.height(), 20
 
-        scale = 0.96 if self._pressed else 1.0
-        ox = w * (1 - scale) / 2; oy = h * (1 - scale) / 2
-        rw = w * scale;            rh = h * scale
+        sc = 0.95 if self._pressed else 1.0
+        ox = w*(1-sc)/2; oy = h*(1-sc)/2
+        rw = w*sc;        rh = h*sc
 
-        # ── 외부 소프트 글로우 ──────────────────────────
-        glow_a = int(40 + 30 * self._pulse) if not self._pressed else 20
-        for i in range(5, 0, -1):
-            a = max(0, glow_a - i * 7)
-            gp = QPen(QColor(30, 160, 255, a)); gp.setWidth(i * 2)
-            p.setPen(gp); p.setBrush(Qt.BrushStyle.NoBrush)
-            m = ox + i
-            p.drawRoundedRect(QRectF(m, oy+i, rw-i*2, rh-i*2), r, r)
+        # ── 카드 클리핑 영역 ──────────────────────────────
+        clip = QPainterPath()
+        clip.addRoundedRect(QRectF(ox, oy, rw, rh), r, r)
+        p.setClipPath(clip)
 
-        # ── 배경 그라디언트 (블루~딥블루) ──────────────
-        bg = QLinearGradient(ox, oy, ox, oy + rh)
-        if self._pressed:
-            bg.setColorAt(0, QColor(0, 100, 210))
-            bg.setColorAt(1, QColor(0,  50, 140))
-        else:
-            bg.setColorAt(0, QColor(10, 130, 255))
-            bg.setColorAt(1, QColor(0,  60, 180))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(bg))
-        p.drawRoundedRect(QRectF(ox, oy, rw, rh), r, r)
+        # ── 다크 베이스 ───────────────────────────────────
+        p.fillRect(QRectF(ox, oy, rw, rh), QColor(8, 16, 36, 230))
 
-        # ── 상단 유리 광택 (흰색 반투명 호) ─────────────
-        glass = QLinearGradient(ox, oy, ox, oy + rh * 0.45)
-        glass.setColorAt(0,   QColor(255, 255, 255, 70))
-        glass.setColorAt(0.5, QColor(255, 255, 255, 18))
-        glass.setColorAt(1,   QColor(255, 255, 255, 0))
-        p.setBrush(QBrush(glass))
-        pp = QPainterPath()
-        pp.addRoundedRect(QRectF(ox, oy, rw, rh * 0.5), r, r)
-        p.drawPath(pp)
+        # ── 블루 오로라 블롭 (좌하단) ─────────────────────
+        pulse_a = int(80 + 40 * self._pulse)
+        blob1 = QRadialGradient(QPointF(ox + rw*0.25, oy + rh*0.75), rw*0.65)
+        blob1.setColorAt(0, QColor(20, 100, 255, pulse_a))
+        blob1.setColorAt(1, QColor(20, 100, 255, 0))
+        p.fillRect(QRectF(ox, oy, rw, rh), QBrush(blob1))
 
-        # ── 테두리 (옅은 흰) ─────────────────────────────
-        p.setPen(QPen(QColor(255, 255, 255, 55), 1.2))
+        # ── 시안 오로라 블롭 (우상단) ─────────────────────
+        blob2 = QRadialGradient(QPointF(ox + rw*0.80, oy + rh*0.20), rw*0.50)
+        blob2.setColorAt(0, QColor(0, 180, 255, int(50 + 25*self._pulse)))
+        blob2.setColorAt(1, QColor(0, 180, 255, 0))
+        p.fillRect(QRectF(ox, oy, rw, rh), QBrush(blob2))
+
+        # ── 프로스티드 글라스 오버레이 ────────────────────
+        p.fillRect(QRectF(ox, oy, rw, rh), QColor(10, 30, 70, 60))
+
+        # ── 상단 유리 광택 ────────────────────────────────
+        shine = QLinearGradient(ox, oy, ox, oy + rh*0.40)
+        shine.setColorAt(0,   QColor(255, 255, 255, 50))
+        shine.setColorAt(0.5, QColor(255, 255, 255, 12))
+        shine.setColorAt(1,   QColor(255, 255, 255,  0))
+        p.fillRect(QRectF(ox, oy, rw, rh*0.5), QBrush(shine))
+
+        p.setClipping(False)
+
+        # ── 테두리 ────────────────────────────────────────
+        border_a = int(80 + 60*self._pulse)
+        p.setPen(QPen(QColor(80, 160, 255, border_a), 1.2))
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawRoundedRect(QRectF(ox+1, oy+1, rw-2, rh-2), r, r)
+        p.drawRoundedRect(QRectF(ox+0.6, oy+0.6, rw-1.2, rh-1.2), r, r)
 
-        # ── 아이콘 ───────────────────────────────────────
-        p.setPen(QPen(QColor(255, 255, 255, 230)))
-        p.setFont(QFont(FONT, 22))
-        p.drawText(QRectF(ox, oy + 4, rw, rh * 0.40),
-                   Qt.AlignmentFlag.AlignCenter, "🧠")
+        # ── 아이콘 ────────────────────────────────────────
+        p.setPen(QPen(QColor(255, 255, 255, 220)))
+        p.setFont(QFont(FONT, 24))
+        p.drawText(QRectF(ox, oy+4, rw, rh*0.38), Qt.AlignmentFlag.AlignCenter, "🧠")
 
-        # ── 주 텍스트 ────────────────────────────────────
-        p.setFont(QFont(FONT, 12, QFont.Weight.Bold))
+        # ── 제목 ──────────────────────────────────────────
+        p.setFont(QFont(FONT, 13, QFont.Weight.Bold))
         p.setPen(QPen(QColor(255, 255, 255)))
-        p.drawText(QRectF(ox, oy + rh * 0.44, rw, rh * 0.20),
-                   Qt.AlignmentFlag.AlignCenter, "AVPU")
+        p.drawText(QRectF(ox, oy+rh*0.43, rw, rh*0.20), Qt.AlignmentFlag.AlignCenter, "AVPU")
         p.setFont(QFont(FONT, 8))
-        p.setPen(QPen(QColor(200, 230, 255)))
-        p.drawText(QRectF(ox, oy + rh * 0.60, rw, rh * 0.14),
-                   Qt.AlignmentFlag.AlignCenter, "의식 수준 확인")
+        p.setPen(QPen(QColor(160, 210, 255, 200)))
+        p.drawText(QRectF(ox, oy+rh*0.60, rw, rh*0.14), Qt.AlignmentFlag.AlignCenter, "의식 수준 확인")
 
-        # ── A V P U 뱃지 ────────────────────────────────
-        bw = (rw - 24) / 4; bh = 20; by = oy + rh - bh - 10
-        for i, (lt, lc) in enumerate([
-            ("A", QColor(0,230,120)),
-            ("V", QColor(255,220,0)),
-            ("P", QColor(255,140,0)),
-            ("U", QColor(255,60,60)),
-        ]):
-            bx = ox + 6 + i * (bw + 4)
-            pill = QColor(lc); pill.setAlpha(55)
-            p.setBrush(QBrush(pill))
-            p.setPen(QPen(lc, 1))
-            p.drawRoundedRect(QRectF(bx, by, bw, bh), bh/2, bh/2)
-            p.setFont(QFont(FONT, 8, QFont.Weight.Bold))
-            p.setPen(QPen(lc))
-            p.drawText(QRectF(bx, by, bw, bh), Qt.AlignmentFlag.AlignCenter, lt)
+        # ── A V P U 뱃지 ─────────────────────────────────
+        bw=(rw-24)/4; bh=19; by=oy+rh-bh-9
+        for i,(lt,lc) in enumerate([("A",QColor(0,230,120)),("V",QColor(255,220,0)),
+                                     ("P",QColor(255,140,0)),("U",QColor(255,60,60))]):
+            bx=ox+6+i*(bw+4)
+            pill=QColor(lc.red(),lc.green(),lc.blue(),50)
+            p.setBrush(QBrush(pill)); p.setPen(QPen(lc,1))
+            p.drawRoundedRect(QRectF(bx,by,bw,bh), bh/2, bh/2)
+            p.setFont(QFont(FONT,8,QFont.Weight.Bold)); p.setPen(QPen(lc))
+            p.drawText(QRectF(bx,by,bw,bh), Qt.AlignmentFlag.AlignCenter, lt)
 
-    def mousePressEvent(self, _):   self._pressed = True;  self.update()
+    def mousePressEvent(self, _):   self._pressed=True;  self.update()
     def mouseReleaseEvent(self, e):
-        self._pressed = False; self.update()
+        self._pressed=False; self.update()
         if self.rect().contains(e.position().toPoint()): self._on_click()
-    def enterEvent(self, _): self._hover = True;  self.update()
-    def leaveEvent(self, _): self._hover = False; self.update()
+    def enterEvent(self, _): self.update()
+    def leaveEvent(self, _): self.update()
 
 
 # ══════════════════════════════════════════════════════════
-#  응급 시나리오 버튼  (Car-HMI 글라스 카드)
+#  응급 시나리오 버튼  (오로라 블롭 글라스)
 # ══════════════════════════════════════════════════════════
 class EmergBtn(QWidget):
     """
-    글라스 카드 스타일:
-    - 색상별 그라디언트 배경 (진→연)
-    - 상단 유리 광택
-    - 아이콘 좌측 원형 배지 + 텍스트 우측
-    - 눌리면 살짝 스케일 다운
+    헬스 그리드 스타일 오로라 카드:
+    · 다크 베이스 + 색상별 라디얼 블롭
+    · 프로스티드 글라스 오버레이
+    · 원형 아이콘 배지 (좌측)
+    · 흰 텍스트
+    · 눌림 스케일 다운
     """
-    # 색상별 그라디언트 쌍 (top, bottom)
-    _GRADS = {
-        "#ff3b3b": ("#c0001a", "#7a0010"),   # RED  - CPR
-        "#ff8c00": ("#c05800", "#7a3000"),   # ORANGE - 출혈
-        "#ffe033": ("#9a8000", "#5a4a00"),   # YELLOW - 화상
-        "#00e5c8": ("#007a6a", "#003d35"),   # TEAL  - 골절
-        "#0af":    ("#006aaa", "#003366"),   # NEON  - 익수
-        "#c87bff": ("#6a00cc", "#3a0077"),   # PURPLE- 기도
+    # 색상 → 오로라 블롭 RGB
+    _BLOB = {
+        "#ff3b3b": (255,  45,  80),   # 빨강 - CPR
+        "#ff8c00": (255, 110,  10),   # 오렌지 - 출혈
+        "#ffe033": (220, 180,   0),   # 옐로 - 화상
+        "#00e5c8": (  0, 220, 190),   # 민트 - 골절
+        "#0af":    (  0, 170, 255),   # 블루 - 익수
+        "#c87bff": (180,  80, 255),   # 퍼플 - 기도
     }
 
     def __init__(self, icon, name, color, on_click, parent=None):
         super().__init__(parent)
-        self._icon     = icon
-        self._name     = name
-        self._color    = QColor(color)
+        self._icon  = icon
+        self._name  = name
+        self._color = QColor(color)
+        self._rgb   = self._BLOB.get(color, (80, 160, 255))
         self._pressed  = False
         self._on_click = on_click
-        grad = self._GRADS.get(color, ("#0a3060", "#041830"))
-        self._g_top = QColor(grad[0])
-        self._g_bot = QColor(grad[1])
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h, r = self.width(), self.height(), 14
+        w, h, r = self.width(), self.height(), 16
 
-        scale = 0.95 if self._pressed else 1.0
-        ox = w*(1-scale)/2; oy = h*(1-scale)/2
-        rw = w*scale;        rh = h*scale
+        sc = 0.94 if self._pressed else 1.0
+        ox = w*(1-sc)/2; oy = h*(1-sc)/2
+        rw = w*sc;        rh = h*sc
+        rr, gg, bb = self._rgb
 
-        # ── 소프트 글로우 ─────────────────────────────────
-        c = self._color
-        for i in range(4, 0, -1):
-            a = (15 + i*10) if not self._pressed else 5
-            gp = QPen(QColor(c.red(), c.green(), c.blue(), a)); gp.setWidth(i*2)
-            p.setPen(gp); p.setBrush(Qt.BrushStyle.NoBrush)
-            m = ox+i
-            p.drawRoundedRect(QRectF(m, oy+i, rw-i*2, rh-i*2), r, r)
+        # ── 클립 ─────────────────────────────────────────
+        clip = QPainterPath()
+        clip.addRoundedRect(QRectF(ox, oy, rw, rh), r, r)
+        p.setClipPath(clip)
 
-        # ── 그라디언트 배경 ───────────────────────────────
-        bg = QLinearGradient(ox, oy, ox+rw*0.6, oy+rh)
-        t_ = self._g_top if not self._pressed else self._g_bot
-        b_ = self._g_bot
-        bg.setColorAt(0, t_); bg.setColorAt(1, b_)
-        p.setPen(Qt.PenStyle.NoPen); p.setBrush(QBrush(bg))
-        p.drawRoundedRect(QRectF(ox, oy, rw, rh), r, r)
+        # ── 다크 베이스 ───────────────────────────────────
+        p.fillRect(QRectF(ox, oy, rw, rh), QColor(6, 12, 26, 220))
 
-        # ── 유리 광택 ─────────────────────────────────────
-        glass = QLinearGradient(ox, oy, ox, oy+rh*0.5)
-        glass.setColorAt(0,   QColor(255,255,255, 45))
-        glass.setColorAt(0.6, QColor(255,255,255,  8))
-        glass.setColorAt(1,   QColor(255,255,255,  0))
-        p.setBrush(QBrush(glass))
-        gp2 = QPainterPath()
-        gp2.addRoundedRect(QRectF(ox, oy, rw, rh*0.55), r, r)
-        p.drawPath(gp2)
+        # ── 오로라 블롭 (우하단 코너) ─────────────────────
+        blob_a = 90 if not self._pressed else 60
+        blob = QRadialGradient(QPointF(ox+rw*0.85, oy+rh*0.80), rw*0.75)
+        blob.setColorAt(0, QColor(rr, gg, bb, blob_a))
+        blob.setColorAt(1, QColor(rr, gg, bb, 0))
+        p.fillRect(QRectF(ox, oy, rw, rh), QBrush(blob))
 
-        # ── 테두리 ───────────────────────────────────────
-        p.setPen(QPen(QColor(255,255,255, 40), 1))
+        # ── 보조 블롭 (좌상단, 더 연하게) ────────────────
+        blob2 = QRadialGradient(QPointF(ox+rw*0.15, oy+rh*0.20), rw*0.45)
+        blob2.setColorAt(0, QColor(rr, gg, bb, 35))
+        blob2.setColorAt(1, QColor(rr, gg, bb,  0))
+        p.fillRect(QRectF(ox, oy, rw, rh), QBrush(blob2))
+
+        # ── 프로스티드 글라스 ─────────────────────────────
+        p.fillRect(QRectF(ox, oy, rw, rh), QColor(5, 10, 25, 80))
+
+        # ── 유리 광택 (상단 1/3) ─────────────────────────
+        shine = QLinearGradient(ox, oy, ox, oy+rh*0.45)
+        shine.setColorAt(0,   QColor(255,255,255, 35))
+        shine.setColorAt(0.6, QColor(255,255,255,  6))
+        shine.setColorAt(1,   QColor(255,255,255,  0))
+        p.fillRect(QRectF(ox, oy, rw, rh*0.5), QBrush(shine))
+
+        p.setClipping(False)
+
+        # ── 테두리 ────────────────────────────────────────
+        p.setPen(QPen(QColor(rr, gg, bb, 80), 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawRoundedRect(QRectF(ox+1, oy+1, rw-2, rh-2), r, r)
+        p.drawRoundedRect(QRectF(ox+0.5, oy+0.5, rw-1, rh-1), r, r)
 
-        # ── 좌측 원형 아이콘 배지 ─────────────────────────
-        cr = rh * 0.30
+        # ── 아이콘 원형 배지 ──────────────────────────────
+        cr = rh * 0.28
         cx = ox + cr + 10; cy = oy + rh/2
-        badge_bg = QColor(255, 255, 255, 35)
-        p.setBrush(QBrush(badge_bg))
-        p.setPen(QPen(QColor(255,255,255,60), 1))
+        badge = QRadialGradient(QPointF(cx, cy), cr)
+        badge.setColorAt(0, QColor(rr, gg, bb, 80))
+        badge.setColorAt(1, QColor(rr, gg, bb, 20))
+        p.setBrush(QBrush(badge))
+        p.setPen(QPen(QColor(rr, gg, bb, 120), 1))
         p.drawEllipse(QRectF(cx-cr, cy-cr, cr*2, cr*2))
-        p.setFont(QFont(FONT, int(cr * 0.85)))
-        p.setPen(QPen(QColor(255,255,255,240)))
+        p.setFont(QFont(FONT, int(cr*0.80)))
+        p.setPen(QPen(QColor(255,255,255,230)))
         p.drawText(QRectF(cx-cr, cy-cr, cr*2, cr*2), Qt.AlignmentFlag.AlignCenter, self._icon)
 
-        # ── 텍스트 ───────────────────────────────────────
-        tx = cx + cr + 10; tw = rw - (tx - ox) - 8
+        # ── 텍스트 ────────────────────────────────────────
+        tx = cx+cr+10; tw = rw-(tx-ox)-6
         p.setFont(QFont(FONT, 10, QFont.Weight.Bold))
-        p.setPen(QPen(QColor(255,255,255,240)))
-        p.drawText(QRectF(tx, oy, tw, rh), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._name)
+        p.setPen(QPen(QColor(255,255,255,235)))
+        p.drawText(QRectF(tx, oy, tw, rh), Qt.AlignmentFlag.AlignVCenter|Qt.AlignmentFlag.AlignLeft, self._name)
 
-    def mousePressEvent(self, _): self._pressed=True; self.update()
+    def mousePressEvent(self, _): self._pressed=True;  self.update()
     def mouseReleaseEvent(self, e):
         self._pressed=False; self.update()
         if self.rect().contains(e.position().toPoint()): self._on_click()
@@ -776,12 +830,10 @@ class MainScreen(QWidget):
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.VLine)
         sep.setFixedHeight(36); sep.setStyleSheet(f"color:{NEON2};")
 
-        title_col = QVBoxLayout(); title_col.setSpacing(1)
-        tl = QLabel("MDTS"); tl.setFont(QFont(FONT, 16, QFont.Weight.Bold))
-        tl.setStyleSheet(f"background:transparent; color:{NEON}; letter-spacing:4px;")
-        sub = QLabel("Maritime Digital Triage System  ·  비의료인용")
-        sub.setFont(QFont(FONT, 8)); sub.setStyleSheet(f"background:transparent; color:{DIM};")
-        title_col.addWidget(tl); title_col.addWidget(sub)
+        title_col = QVBoxLayout(); title_col.setSpacing(0)
+        tl = QLabel("MDTS"); tl.setFont(QFont(FONT, 18, QFont.Weight.Black))
+        tl.setStyleSheet("background:transparent; color:#ffffff; letter-spacing:5px;")
+        title_col.addWidget(tl)
 
         lay.addWidget(logo_lbl); lay.addWidget(sep); lay.addLayout(title_col); lay.addStretch()
 
