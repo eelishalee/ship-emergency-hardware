@@ -1,5 +1,5 @@
 """
-Ship First Aid — Maritime Medic v2
+MDTS — Maritime Digital Triage System
 PyQt6 · 1024×600  (7-inch rugged tablet)
 """
 import sys, math
@@ -17,11 +17,11 @@ from PyQt6.QtGui   import (
 W, H = 1024, 600
 
 # ── 팔레트 ─────────────────────────────────────────────────
-BG      = "#060d18"
-PANEL   = "#0c1628"
-PANEL2  = "#0f1e35"
-BORD    = "#1a3050"
-BORD2   = "#0e2440"
+BG      = "#04090f"   # 카메라 패널 내부색 통일
+PANEL   = "#080f1c"
+PANEL2  = "#0c1828"
+BORD    = "#16293f"
+BORD2   = "#0a1e30"
 ACCENT  = "#0ea5e9"
 ACCENT2 = "#38bdf8"
 RED     = "#ef4444"
@@ -477,7 +477,7 @@ class CameraPanel(QFrame):
         self._view = QLabel()
         self._view.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._view.setStyleSheet(
-            f"background:#04090f; border:1px solid {BORD2}; border-radius:6px; color:{DIM};"
+            f"background:{BG}; border:1px solid {BORD2}; border-radius:6px; color:{DIM};"
         )
         self._view.setText("카메라 미연결")
         self._view.setFont(QFont(FONT, 10))
@@ -670,16 +670,25 @@ class MainScreen(QWidget):
         lay.setContentsMargins(14, 0, 10, 0)
         lay.setSpacing(8)
 
-        # 로고 영역
-        logo = QLabel("✛")
-        logo.setFont(QFont(FONT, 20, QFont.Weight.Bold))
-        logo.setStyleSheet(f"color:{RED}; background:transparent;")
-        logo.setFixedWidth(28)
+        # 로고 이미지
+        import os
+        logo = QLabel()
+        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png")
+        logo_pix = QPixmap(logo_path)
+        if not logo_pix.isNull():
+            logo_pix = logo_pix.scaled(36, 36, Qt.AspectRatioMode.KeepAspectRatio,
+                                       Qt.TransformationMode.SmoothTransformation)
+            logo.setPixmap(logo_pix)
+        else:
+            logo.setText("⚓")
+            logo.setFont(QFont(FONT, 18, QFont.Weight.Bold))
+        logo.setFixedWidth(40)
+        logo.setStyleSheet("background:transparent;")
 
-        tl = QLabel("MARITIME MEDIC")
-        tl.setFont(QFont(FONT, 13, QFont.Weight.Bold))
-        tl.setStyleSheet(f"color:{TEXT}; background:transparent; letter-spacing:2px;")
-        sub = QLabel("선박 응급처치 가이드  ·  비의료인용")
+        tl = QLabel("MDTS")
+        tl.setFont(QFont(FONT, 15, QFont.Weight.Bold))
+        tl.setStyleSheet(f"color:{TEXT}; background:transparent; letter-spacing:3px;")
+        sub = QLabel("Maritime Digital Triage System  ·  비의료인용")
         sub.setFont(QFont(FONT, 8))
         sub.setStyleSheet(f"color:{DIM}; background:transparent;")
 
@@ -1141,7 +1150,7 @@ class SosScreen(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Maritime Medic — 선박 응급처치 가이드")
+        self.setWindowTitle("MDTS — Maritime Digital Triage System")
         self.setFixedSize(W, H)
         self._stack = QStackedWidget()
         self.setCentralWidget(self._stack)
